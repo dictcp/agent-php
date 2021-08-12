@@ -187,6 +187,31 @@ function get_cpu_usage($stat1,$stat2) {
 
 }
 
+function get_disk_usage() {
+	$mount_info = file('/proc/mounts');
+	$disk_strings = [];
+	
+	foreach($mount_info as $line) {
+
+		// TODO handle all block devices
+		if(preg_match('|^/dev/sd[a-z]|',$line)) {
+
+			// Extract stats
+			$mount_info = explode(' ',$line);
+
+			$mountpoint = $mount_info[1];
+			$disk_total = disk_total_space($mountpoint);
+			$disk_used = $disk_total-disk_free_space($mountpoint);
+			$disk_path = explode("/",$mountpoint);
+			$disk_path = "/".$disk_path[1];
+			$disk_strings[] = $disk_path.",".intval($disk_total).",".intval($disk_used).";";
+
+		}
+	}
+	
+	return $disk_strings;
+}
+
 // Function used to find the array element that contains a given string
 function find_in_array($needle,$subject) {
 
@@ -307,11 +332,7 @@ if($swap_size > 0) { // Server swap exists
 }
 
 // Disk Usage
-$disk_total = disk_total_space(dirname(__FILE__));
-$disk_used = $disk_total-disk_free_space(dirname(__FILE__));
-$disk_path = explode("/",dirname(__FILE__));
-$disk_path = "/".$disk_path[1];
-$disk = base64_encode($disk_path.",".intval($disk_total).",".intval($disk_used).";");
+$disk = base64_encode(implode("\n", get_disk_usage()));
 
 // Network Usage
 $rx = round($net[0]/$seconds); // Incoming
