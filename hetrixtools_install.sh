@@ -51,6 +51,7 @@ fi
 echo "Checking for crontab and wget..."
 command -v crontab >/dev/null 2>&1 || { echo "ERROR: Crontab is required to run this agent." >&2; exit 1; }
 command -v wget >/dev/null 2>&1 || { echo "ERROR: wget is required to run this agent." >&2; exit 1; }
+command -v php >/dev/null 2>&1 || { echo "ERROR: php is required to run this agent." >&2; exit 1; }
 echo "... done."
 
 # Remove old agent (if exists)
@@ -71,62 +72,63 @@ echo "... done."
 
 # Fetching new agent
 echo "Fetching the new agent..."
-wget -t 1 -T 30 -qO /etc/hetrixtools/hetrixtools_agent.sh --no-check-certificate https://raw.github.com/hetrixtools/agent/master/hetrixtools_agent.sh
+wget -t 1 -T 30 -qO /etc/hetrixtools/hetrixtools_agent.php --no-check-certificate https://raw.github.com/dictcp/hetrixtools-agent-php/master/hetrixtools_agent.php
 echo "... done."
 
 # Inserting Server ID (SID) into the agent config
 echo "Inserting Server ID (SID) into agent config..."
-sed -i "s/SIDPLACEHOLDER/$SID/" /etc/hetrixtools/hetrixtools_agent.sh
+sed -i "s/SIDPLACEHOLDER/$SID/" /etc/hetrixtools/hetrixtools_agent.php
 echo "... done."
 
-# Check if any services are to be monitored
-echo "Checking if any services should be monitored..."
-if [ "$3" != "0" ]
-then
-	echo "Services found, inserting them into the agent config..."
-	sed -i "s/CheckServices=\"\"/CheckServices=\"$3\"/" /etc/hetrixtools/hetrixtools_agent.sh
-fi
-echo "... done."
-
-# Check if software RAID should be monitored
-echo "Checking if software RAID should be monitored..."
-if [ "$4" -eq "1" ]
-then
-	echo "Enabling software RAID monitoring in the agent config..."
-	sed -i "s/CheckSoftRAID=0/CheckSoftRAID=1/" /etc/hetrixtools/hetrixtools_agent.sh
-fi
-echo "... done."
-
-# Check if Drive Health should be monitored
-echo "Checking if Drive Health should be monitored..."
-if [ "$5" -eq "1" ]
-then
-	echo "Enabling Drive Health monitoring in the agent config..."
-	sed -i "s/CheckDriveHealth=0/CheckDriveHealth=1/" /etc/hetrixtools/hetrixtools_agent.sh
-fi
-echo "... done."
-
-# Check if 'View running processes' should be enabled
-echo "Checking if 'View running processes' should be enabled..."
-if [ "$6" -eq "1" ]
-then
-	echo "Enabling 'View running processes' in the agent config..."
-	sed -i "s/RunningProcesses=0/RunningProcesses=1/" /etc/hetrixtools/hetrixtools_agent.sh
-fi
-echo "... done."
-
-# Check if any ports to monitor number of connections on
-echo "Checking if any ports to monitor number of connections on..."
-if [ "$7" != "0" ]
-then
-	echo "Ports found, inserting them into the agent config..."
-	sed -i "s/ConnectionPorts=\"\"/ConnectionPorts=\"$7\"/" /etc/hetrixtools/hetrixtools_agent.sh
-fi
-echo "... done."
+# # Check if any services are to be monitored
+# echo "Checking if any services should be monitored..."
+# if [ "$3" != "0" ]
+# then
+# 	echo "Services found, inserting them into the agent config..."
+# 	sed -i "s/CheckServices=\"\"/CheckServices=\"$3\"/" /etc/hetrixtools/hetrixtools_agent.php
+# fi
+# echo "... done."
+# 
+# # Check if software RAID should be monitored
+# echo "Checking if software RAID should be monitored..."
+# if [ "$4" -eq "1" ]
+# then
+# 	echo "Enabling software RAID monitoring in the agent config..."
+# 	sed -i "s/CheckSoftRAID=0/CheckSoftRAID=1/" /etc/hetrixtools/hetrixtools_agent.php
+# fi
+# echo "... done."
+# 
+# # Check if Drive Health should be monitored
+# echo "Checking if Drive Health should be monitored..."
+# if [ "$5" -eq "1" ]
+# then
+# 	echo "Enabling Drive Health monitoring in the agent config..."
+# 	sed -i "s/CheckDriveHealth=0/CheckDriveHealth=1/" /etc/hetrixtools/hetrixtools_agent.php
+# fi
+# echo "... done."
+# 
+# # Check if 'View running processes' should be enabled
+# echo "Checking if 'View running processes' should be enabled..."
+# if [ "$6" -eq "1" ]
+# then
+# 	echo "Enabling 'View running processes' in the agent config..."
+# 	sed -i "s/RunningProcesses=0/RunningProcesses=1/" /etc/hetrixtools/hetrixtools_agent.php
+# fi
+# echo "... done."
+# 
+# # Check if any ports to monitor number of connections on
+# echo "Checking if any ports to monitor number of connections on..."
+# if [ "$7" != "0" ]
+# then
+# 	echo "Ports found, inserting them into the agent config..."
+# 	sed -i "s/ConnectionPorts=\"\"/ConnectionPorts=\"$7\"/" /etc/hetrixtools/hetrixtools_agent.php
+# fi
+# echo "... done."
 
 # Killing any running hetrixtools agents
 echo "Making sure no hetrixtools agent scripts are currently running..."
 ps aux | grep -ie hetrixtools_agent.sh | awk '{print $2}' | xargs kill -9
+ps aux | grep -ie hetrixtools_agent.php | awk '{print $2}' | xargs kill -9
 echo "... done."
 
 # Checking if hetrixtools user exists
@@ -162,10 +164,10 @@ echo "... done."
 if [ "$2" -eq "1" ]
 then
 	echo "Setting up the new cronjob as 'root' user..."
-	crontab -u root -l 2>/dev/null | { cat; echo "* * * * * bash /etc/hetrixtools/hetrixtools_agent.sh >> /etc/hetrixtools/hetrixtools_cron.log 2>&1"; } | crontab -u root - >/dev/null 2>&1
+	crontab -u root -l 2>/dev/null | { cat; echo "* * * * * php /etc/hetrixtools/hetrixtools_agent.php >> /etc/hetrixtools/hetrixtools_cron.log 2>&1"; } | crontab -u root - >/dev/null 2>&1
 else
 	echo "Setting up the new cronjob as 'hetrixtools' user..."
-	crontab -u hetrixtools -l 2>/dev/null | { cat; echo "* * * * * bash /etc/hetrixtools/hetrixtools_agent.sh >> /etc/hetrixtools/hetrixtools_cron.log 2>&1"; } | crontab -u hetrixtools - >/dev/null 2>&1
+	crontab -u hetrixtools -l 2>/dev/null | { cat; echo "* * * * * php /etc/hetrixtools/hetrixtools_agent.php >> /etc/hetrixtools/hetrixtools_cron.log 2>&1"; } | crontab -u hetrixtools - >/dev/null 2>&1
 fi
 echo "... done."
 
@@ -187,10 +189,10 @@ echo "... done."
 if [ "$2" -eq "1" ]
 then
 	echo "Starting the agent under the 'root' user..."
-	bash /etc/hetrixtools/hetrixtools_agent.sh > /dev/null 2>&1 &
+	php /etc/hetrixtools/hetrixtools_agent.php > /dev/null 2>&1 &
 else
 	echo "Starting the agent under the 'hetrixtools' user..."
-	sudo -u hetrixtools bash /etc/hetrixtools/hetrixtools_agent.sh > /dev/null 2>&1 &
+	sudo -u hetrixtools php /etc/hetrixtools/hetrixtools_agent.php > /dev/null 2>&1 &
 fi
 echo "... done."
 
