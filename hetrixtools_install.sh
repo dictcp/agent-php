@@ -80,15 +80,15 @@ echo "Inserting Server ID (SID) into agent config..."
 sed -i "s/SIDPLACEHOLDER/$SID/" /etc/hetrixtools/hetrixtools_agent.php
 echo "... done."
 
-# # Check if any services are to be monitored
-# echo "Checking if any services should be monitored..."
-# if [ "$3" != "0" ]
-# then
-# 	echo "Services found, inserting them into the agent config..."
-# 	sed -i "s/CheckServices=\"\"/CheckServices=\"$3\"/" /etc/hetrixtools/hetrixtools_agent.php
-# fi
-# echo "... done."
-# 
+# Check if any services are to be monitored
+echo "Checking if any services should be monitored..."
+if [ "$3" != "0" ]
+then
+	echo "Services found, inserting them into the agent config..."
+	sed -i "s/\$check_services = \"\"/\$check_services = \"$3\"/" /etc/hetrixtools/hetrixtools_agent.php
+fi
+echo "... done."
+
 # # Check if software RAID should be monitored
 # echo "Checking if software RAID should be monitored..."
 # if [ "$4" -eq "1" ]
