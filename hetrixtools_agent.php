@@ -32,6 +32,11 @@ $SID = 'SIDPLACEHOLDER';
 // If you wish to monitor just one particular interface, then specify its name below (ie: 'eth0')
 $inet = '';
 
+// Check Services
+// * separate service names by comma (,) with a maximum of 10 services to be monitored (ie: "ssh,mysql,apache2,nginx")
+// * NOTE: this will only check if the service is running, not its functionality
+$check_services = "";
+
 //////////////
 // Settings //
 //////////////
@@ -338,8 +343,31 @@ $disk = base64_encode(implode("\n", get_disk_usage()));
 $rx = round($net[0]/$seconds); // Incoming
 $tx = round($net[1]/$seconds); // Outgoing
 
+// get process list
+$process_cmdlines = [];
+if ($handle = opendir('/proc')) {
+    /* This is the correct way to loop over the directory. */
+    while (false !== ($entry = readdir($handle))) {
+		// get only those with PID
+        if (is_numeric($entry)) {
+            $process_cmdlines[] = str_replace("\n", " ", trim(file_get_contents("/proc/$entry/cmdline")));
+        }
+    }
+    closedir($handle);
+}
+$process_cmdline_string = implode("\n", $process_cmdlines);
+
+// match process list with check_services
+$service_status = implode(";", array_map(function ($service) use ($process_cmdline_string) {
+    if (preg_match("%(\n|/|\s)$service%", $process_cmdline_string) == 1) {
+        return base64_encode($service) . ",1";
+    } else {
+        return base64_encode($service) . ",0";
+    }
+}, explode(",", $check_services)));
+
 // Arrange the post data
-$post_data = "$os|$uptime|$cpu_model|$cpu_speed|$cpu_cores|$cpu_usage|$cpu_iowait|$ram_size|$ram_usage|$swap_size|$swap_usage|$disk|$rx|$tx|";
+$post_data = "$os|$uptime|$cpu_model|$cpu_speed|$cpu_cores|$cpu_usage|$cpu_iowait|$ram_size|$ram_usage|$swap_size|$swap_usage|$disk|$rx|$tx|$service_status|";
 $post = "v=$version&a=1&s=$SID&d=$post_data";
 
 // Log the current post string (for debugging)
