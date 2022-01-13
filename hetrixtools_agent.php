@@ -367,8 +367,8 @@ $service_status = implode(";", array_map(function ($service) use ($process_cmdli
 }, explode(",", $check_services)));
 
 // Arrange the post data
-$post_data = "$os|$uptime|$cpu_model|$cpu_speed|$cpu_cores|$cpu_usage|$cpu_iowait|$ram_size|$ram_usage|$swap_size|$swap_usage|$disk|$rx|$tx|$service_status|";
-$post = "v=$version&a=1&s=$SID&d=$post_data";
+$post_data = "$os|$uptime|$cpu_model|$cpu_speed|$cpu_cores|$cpu_usage|$cpu_iowait|$ram_size|$ram_usage|$swap_size|$swap_usage|$disk|$rx|$tx|$service_status";
+$post = "v=$version&s=$SID&d=$post_data";
 
 // Log the current post string (for debugging)
 file_put_contents(dirname(__FILE__).'/hetrixtools_agent.log',$post);
