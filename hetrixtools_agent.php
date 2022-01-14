@@ -21,7 +21,7 @@
 //////////////
 
 // Agent Version (do not change)
-$version = '1.5.2';
+$version = '1.5.6';
 
 // SID (Server ID)
 // You need to manually edit this value, and replace it with the SID given to you by the HetrixTools platform
@@ -285,7 +285,16 @@ elseif(is_readable('/etc/debian_version')) {$os = "Debian ".file_get_contents('/
 elseif(is_readable('/etc/redhat-release')) {$os = file_get_contents('/etc/redhat-release');}
 elseif(is_readable('/proc/sys/kernel/osrelease')) {$os = "Linux ".file_get_contents('/proc/sys/kernel/osrelease');}
 else {$os = "Linux";}
-$os = base64_encode($os);
+
+// Kernel Version
+$kernel = 'unknown';
+if(is_readable('/proc/sys/kernel/osrelease')) {$kernel = file_get_contents('/proc/sys/kernel/osrelease');}
+
+// Is reboot required
+if (is_readable('/var/run/reboot-required')) {$requires_reboot = 1;}
+else {$requires_reboot = 0;}
+
+$os = base64_encode($os."|".$kernel."|".$requires_reboot);
 
 // Uptime
 $uptime = intval(file_get_contents('/proc/uptime'));
@@ -342,6 +351,7 @@ $disk = base64_encode(implode("\n", get_disk_usage()));
 // Network Usage
 $rx = round($net[0]/$seconds); // Incoming
 $tx = round($net[1]/$seconds); // Outgoing
+$nic = base64_encode("|all;$rx;$tx;");
 
 // get process list
 $process_cmdlines = [];
@@ -366,8 +376,18 @@ $service_status = implode(";", array_map(function ($service) use ($process_cmdli
     }
 }, explode(",", $check_services)));
 
+// RAID (not supported yet)
+$raid = "";
+
+// Drive Health (not supported yet)
+$dh = "";
+
+// Running Process (not supported yet)
+$running_process1 = "";
+$running_process2 = "";
+
 // Arrange the post data
-$post_data = "$os|$uptime|$cpu_model|$cpu_speed|$cpu_cores|$cpu_usage|$cpu_iowait|$ram_size|$ram_usage|$swap_size|$swap_usage|$disk|$rx|$tx|$service_status";
+$post_data = "$os|$uptime|$cpu_model|$cpu_speed|$cpu_cores|$cpu_usage|$cpu_iowait|$ram_size|$ram_usage|$swap_size|$swap_usage|$disk|$nic|$service_status|$raid|$dh|$running_process1|$running_process2";
 $post = "v=$version&s=$SID&d=$post_data";
 
 // Log the current post string (for debugging)
