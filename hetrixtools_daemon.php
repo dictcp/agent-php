@@ -250,156 +250,171 @@ function microtime_float() {
 // Functions //
 ///////////////
 
-// Start time
-$start = microtime_float();
+function check_and_update() {
+	global $version, $SID, $inet, $check_services;
 
-// Get initial stats
-$cpu1 = get_cpu_stats();
-$net1 = get_network_stats($inet);
+	// Start time
+	$start = microtime_float();
 
-// Sleep
-$sleep = 60 - intval(date('s'));
-sleep($sleep);
+	// Get initial stats
+	$cpu1 = get_cpu_stats();
+	$net1 = get_network_stats($inet);
 
-// Get secondary stats
-$cpu2 = get_cpu_stats();
-$net2 = get_network_stats($inet);
+	// Sleep
+	$sleep = 60 - intval(date('s'));
+	sleep($sleep);
 
-// End time
-$end = microtime_float();
+	// Get secondary stats
+	$cpu2 = get_cpu_stats();
+	$net2 = get_network_stats($inet);
 
-// Calculate running time
-$seconds = round($end - $start);
+	// End time
+	$end = microtime_float();
 
-// Calculate Usage
-$cpu = get_cpu_usage($cpu1,$cpu2);
-$net = get_network_usage($net1,$net2);
+	// Calculate running time
+	$seconds = round($end - $start);
 
-// Operating System
-if(is_readable('/etc/lsb-release')) {
-	$os = file('/etc/lsb-release');
-	$os = explode('"',$os[3]);
-	$os = $os[1];
+	// Calculate Usage
+	$cpu = get_cpu_usage($cpu1,$cpu2);
+	$net = get_network_usage($net1,$net2);
+
+	// Operating System
+	/*
+	if(is_readable('/etc/lsb-release')) {
+		$os = file('/etc/lsb-release');
+		$os = explode('"',$os[3]);
+		$os = $os[1];
+	}
+	elseif(is_readable('/etc/debian_version')) {$os = "Debian ".file_get_contents('/etc/debian_version');}
+	elseif(is_readable('/etc/redhat-release')) {$os = file_get_contents('/etc/redhat-release');}
+	elseif(is_readable('/proc/sys/kernel/osrelease')) {$os = "Linux ".file_get_contents('/proc/sys/kernel/osrelease');}
+	else {$os = "Linux";}
+	*/
+	$os = "Linux"; // FIXME
+
+	// Kernel Version
+	$kernel = 'unknown';
+	if(is_readable('/proc/sys/kernel/osrelease')) {$kernel = file_get_contents('/proc/sys/kernel/osrelease');}
+
+	// Is reboot required
+	/*
+	if (is_readable('/var/run/reboot-required')) {$requires_reboot = 1;}
+	else {$requires_reboot = 0;}
+	*/
+	$requires_reboot = 0; // FIXME
+
+	$os = base64_encode($os."|".$kernel."|".$requires_reboot);
+
+	// Uptime
+	$uptime = intval(file_get_contents('/proc/uptime'));
+
+	// CPU Info
+	$cpu_info = file('/proc/cpuinfo');
+
+	// CPU Model
+	$cpu_model = explode(": ",$cpu_info[4]);
+	$cpu_model = base64_encode($cpu_model[1]);
+
+	// CPU Speed
+	$cpu_speed = explode(": ",$cpu_info[7]);
+	$cpu_speed = intval($cpu_speed[1]);
+
+	// CPU Cores
+	$cpu_cores = $cpu[2];
+
+	// CPU Usage
+	$cpu_usage = $cpu[0];
+
+	// CPU IOWAIT
+	$cpu_iowait = $cpu[1];
+
+	// RAM Info
+	$ram_info = file('/proc/meminfo');
+
+	// RAM Size
+	$ram_size = intval_from_ram('MemTotal',$ram_info);
+
+	// RAM Usage
+	$ram_free = intval_from_ram('MemFree',$ram_info) + intval_from_ram('Buffers',$ram_info) + intval_from_ram('Cached',$ram_info);
+	$ram_usage = round(100 - (($ram_free*100)/$ram_size),2);
+
+	// Swap Size
+	$swap_size = intval_from_ram('SwapTotal',$ram_info);
+
+	if($swap_size > 0) { // Server swap exists
+
+		// Swap Usage
+		$swap_free = intval_from_ram('SwapFree',$ram_info);
+		$swap_usage = round(100 - (($swap_free*100)/$swap_size),2);
+
+	} else { // Server does not have swap
+
+		// Set Swap usage to 0
+		$swap_usage = 0;
+
+	}
+
+	// Disk Usage
+	$disk = base64_encode(implode("\n", get_disk_usage()));
+
+	// Network Usage
+	$rx = round($net[0]/$seconds); // Incoming
+	$tx = round($net[1]/$seconds); // Outgoing
+	$nic = base64_encode("|all;$rx;$tx;");
+
+	// get process list
+	$process_cmdlines = [];
+	if ($handle = opendir('/proc')) {
+		/* This is the correct way to loop over the directory. */
+		while (false !== ($entry = readdir($handle))) {
+			// get only those with PID
+			if (is_numeric($entry)) {
+				$process_cmdlines[] = str_replace("\n", " ", trim(file_get_contents("/proc/$entry/cmdline")));
+			}
+		}
+		closedir($handle);
+	}
+	$process_cmdline_string = implode("\n", $process_cmdlines);
+
+	// match process list with check_services
+	$service_status = implode(";", array_map(function ($service) use ($process_cmdline_string) {
+		if (preg_match("%(\n|/|\s)$service%", $process_cmdline_string) == 1) {
+			return base64_encode($service) . ",1";
+		} else {
+			return base64_encode($service) . ",0";
+		}
+	}, explode(",", $check_services)));
+
+	// RAID (not supported yet)
+	$raid = "";
+
+	// Drive Health (not supported yet)
+	$dh = "";
+
+	// Running Process (not supported yet)
+	$running_process1 = "";
+	$running_process2 = "";
+
+	// Arrange the post data
+	$post_data = "$os|$uptime|$cpu_model|$cpu_speed|$cpu_cores|$cpu_usage|$cpu_iowait|$ram_size|$ram_usage|$swap_size|$swap_usage|$disk|$nic|$service_status|$raid|$dh|$running_process1|$running_process2";
+	$post = "v=$version&s=$SID&d=$post_data";
+
+	// Log the current post string (for debugging)
+	// file_put_contents(dirname(__FILE__).'/hetrixtools_agent.log',$post);
+
+	// Post the data to HetrixTools
+	$ch = curl_init('https://sm.hetrixtools.net');
+	curl_setopt($ch,CURLOPT_POST,1);
+	curl_setopt($ch,CURLOPT_POSTFIELDS,$post);
+	curl_setopt($ch,CURLOPT_FOLLOWLOCATION,1);
+	curl_setopt($ch,CURLOPT_HEADER,0);
+	curl_setopt($ch,CURLOPT_RETURNTRANSFER,0);
+	curl_exec($ch);
+	curl_close($ch);
 }
-elseif(is_readable('/etc/debian_version')) {$os = "Debian ".file_get_contents('/etc/debian_version');}
-elseif(is_readable('/etc/redhat-release')) {$os = file_get_contents('/etc/redhat-release');}
-elseif(is_readable('/proc/sys/kernel/osrelease')) {$os = "Linux ".file_get_contents('/proc/sys/kernel/osrelease');}
-else {$os = "Linux";}
 
-// Kernel Version
-$kernel = 'unknown';
-if(is_readable('/proc/sys/kernel/osrelease')) {$kernel = file_get_contents('/proc/sys/kernel/osrelease');}
-
-// Is reboot required
-if (is_readable('/var/run/reboot-required')) {$requires_reboot = 1;}
-else {$requires_reboot = 0;}
-
-$os = base64_encode($os."|".$kernel."|".$requires_reboot);
-
-// Uptime
-$uptime = intval(file_get_contents('/proc/uptime'));
-
-// CPU Info
-$cpu_info = file('/proc/cpuinfo');
-
-// CPU Model
-$cpu_model = explode(": ",$cpu_info[4]);
-$cpu_model = base64_encode($cpu_model[1]);
-
-// CPU Speed
-$cpu_speed = explode(": ",$cpu_info[7]);
-$cpu_speed = intval($cpu_speed[1]);
-
-// CPU Cores
-$cpu_cores = $cpu[2];
-
-// CPU Usage
-$cpu_usage = $cpu[0];
-
-// CPU IOWAIT
-$cpu_iowait = $cpu[1];
-
-// RAM Info
-$ram_info = file('/proc/meminfo');
-
-// RAM Size
-$ram_size = intval_from_ram('MemTotal',$ram_info);
-
-// RAM Usage
-$ram_free = intval_from_ram('MemFree',$ram_info) + intval_from_ram('Buffers',$ram_info) + intval_from_ram('Cached',$ram_info);
-$ram_usage = round(100 - (($ram_free*100)/$ram_size),2);
-
-// Swap Size
-$swap_size = intval_from_ram('SwapTotal',$ram_info);
-
-if($swap_size > 0) { // Server swap exists
-
-	// Swap Usage
-	$swap_free = intval_from_ram('SwapFree',$ram_info);
-	$swap_usage = round(100 - (($swap_free*100)/$swap_size),2);
-
-} else { // Server does not have swap
-
-	// Set Swap usage to 0
-	$swap_usage = 0;
-
+while (true) {
+	check_and_update();
 }
-
-// Disk Usage
-$disk = base64_encode(implode("\n", get_disk_usage()));
-
-// Network Usage
-$rx = round($net[0]/$seconds); // Incoming
-$tx = round($net[1]/$seconds); // Outgoing
-$nic = base64_encode("|all;$rx;$tx;");
-
-// get process list
-$process_cmdlines = [];
-if ($handle = opendir('/proc')) {
-    /* This is the correct way to loop over the directory. */
-    while (false !== ($entry = readdir($handle))) {
-		// get only those with PID
-        if (is_numeric($entry)) {
-            $process_cmdlines[] = str_replace("\n", " ", trim(file_get_contents("/proc/$entry/cmdline")));
-        }
-    }
-    closedir($handle);
-}
-$process_cmdline_string = implode("\n", $process_cmdlines);
-
-// match process list with check_services
-$service_status = implode(";", array_map(function ($service) use ($process_cmdline_string) {
-    if (preg_match("%(\n|/|\s)$service%", $process_cmdline_string) == 1) {
-        return base64_encode($service) . ",1";
-    } else {
-        return base64_encode($service) . ",0";
-    }
-}, explode(",", $check_services)));
-
-// RAID (not supported yet)
-$raid = "";
-
-// Drive Health (not supported yet)
-$dh = "";
-
-// Running Process (not supported yet)
-$running_process1 = "";
-$running_process2 = "";
-
-// Arrange the post data
-$post_data = "$os|$uptime|$cpu_model|$cpu_speed|$cpu_cores|$cpu_usage|$cpu_iowait|$ram_size|$ram_usage|$swap_size|$swap_usage|$disk|$nic|$service_status|$raid|$dh|$running_process1|$running_process2";
-$post = "v=$version&s=$SID&d=$post_data";
-
-// Log the current post string (for debugging)
-file_put_contents(dirname(__FILE__).'/hetrixtools_agent.log',$post);
-
-// Post the data to HetrixTools
-$ch = curl_init('https://sm.hetrixtools.net');
-curl_setopt($ch,CURLOPT_POST,1);
-curl_setopt($ch,CURLOPT_POSTFIELDS,$post);
-curl_setopt($ch,CURLOPT_FOLLOWLOCATION,1);
-curl_setopt($ch,CURLOPT_HEADER,0);
-curl_setopt($ch,CURLOPT_RETURNTRANSFER,0);
-curl_exec($ch);
 
 ?>
